@@ -1,0 +1,26 @@
+﻿[en]
+AM_CHAT_PREFIX = !g[AWP Models]!n
+AM_CHAT_ALREADY = This sniper is already selected!
+AM_CHAT_SELECTED = You have selected the sniper !g%s
+AM_MENU_TITLE = \y< \rChoose your AWP model \y>
+AM_MENU_TITLE_PAGE = ^n\r-- \yPage:\r
+AM_MENU_SELECTED = \y~ \rSELECTED \y~
+AM_MENU_VIP_ONLY = \y~ \rVIP \y~
+
+[mk]
+AM_CHAT_PREFIX = !g[AWP Models]!n
+AM_CHAT_ALREADY = Ovoj snajper vekje e izbran!
+AM_CHAT_SELECTED = Go izbra snajperot !g%s
+AM_MENU_TITLE = \y< \rIzberi model za AWP \y>
+AM_MENU_TITLE_PAGE = ^n\r-- \yStranica:\r
+AM_MENU_SELECTED = \y~ \rIZBRAN \y~
+AM_MENU_VIP_ONLY = \y~ \rVIP \y~
+
+[bg]
+AM_CHAT_PREFIX = !g[AWP Models]!n
+AM_CHAT_ALREADY = Tozi snaiper veche e izbran!
+AM_CHAT_SELECTED = Izbra snaipera !g%s
+AM_MENU_TITLE = \y< \rIzberi model za AWP \y>
+AM_MENU_TITLE_PAGE = ^n\r-- \yStranica:\r
+AM_MENU_SELECTED = \y~ \rIZBRAN \y~
+AM_MENU_VIP_ONLY = \y~ \rVIP \y~
