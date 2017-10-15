@@ -3,7 +3,7 @@
 #include <fakemeta>
 #include <hamsandwich>
 
-#define PLUGIN_VERSION "1.3a"
+#define PLUGIN_VERSION "1.3.1"
 #define MAX_SNIPERS 30
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
