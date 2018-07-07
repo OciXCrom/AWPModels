@@ -1,46 +1,132 @@
 #include <amxmodx>
 #include <amxmisc>
+#include <cromchat>
 #include <fakemeta>
 #include <hamsandwich>
+#include <nvault>
 
-#define PLUGIN_VERSION "1.3.1"
-#define MAX_SNIPERS 30
-#define DEFAULT_V "models/v_awp.mdl"
-#define DEFAULT_P "models/p_awp.mdl"
+native crxranks_get_max_levels()
+native crxranks_get_rank_by_level(level, buffer[], len)
+native crxranks_get_user_level(id)
 
-enum _:Info
+new const g_szNatives[][] =
 {
-	Name[32],
-	VModel[128],
-	PModel[128],
-	Flag
+	"crxranks_get_max_levels",
+	"crxranks_get_rank_by_level",
+	"crxranks_get_user_level"
 }
 
-new g_eSnipers[MAX_SNIPERS][Info]
-new g_iSnipersNum
-new g_iSniper[33]
-new bool:g_bFirstTime[33]
-new g_iSayText
-new g_pAtSpawn
+#if !defined m_pPlayer
+    #define m_pPlayer 41
+#endif
+
+#if defined client_disconnected
+	#define client_disconnect client_disconnected
+#endif
+
+#define PLUGIN_VERSION "2.0"
+#define DEFAULT_V "models/v_awp.mdl"
+#define DEFAULT_P "models/p_awp.mdl"
+#define DELAY_ON_CONNECT 2.5
+#define MAX_SOUND_LENGTH 128
+#define MAX_AUTHID_LENGTH 35
+
+#if !defined MAX_NAME_LENGTH
+	#define MAX_NAME_LENGTH 32
+#endif
+
+#if !defined MAX_PLAYERS
+	#define MAX_PLAYERS 32
+#endif
+
+enum _:AWP
+{
+	NAME[MAX_NAME_LENGTH],
+	V_MODEL[MAX_SOUND_LENGTH],
+	P_MODEL[MAX_SOUND_LENGTH],
+	SELECT_SOUND[MAX_SOUND_LENGTH],
+	FLAG,
+	LEVEL,
+	bool:SHOW_RANK
+}
+
+new Array:g_aAWP,
+	bool:g_bFirstTime[MAX_PLAYERS + 1],
+	bool:g_bRankSystem,
+	g_eAWP[MAX_PLAYERS + 1][AWP],
+	g_szAuth[MAX_PLAYERS + 1][MAX_AUTHID_LENGTH],
+	g_iAWP[MAX_PLAYERS + 1],
+	g_iCallback,
+	g_pAtSpawn,
+	g_pSaveChoice,
+	g_iSaveChoice,
+	g_iAWPNum,
+	g_iVault
 
 public plugin_init()
 {
 	register_plugin("AWP Models", PLUGIN_VERSION, "OciXCrom")
 	register_cvar("CRXAWPModels", PLUGIN_VERSION, FCVAR_SERVER|FCVAR_SPONLY|FCVAR_UNLOGGED)
+	
+	if(!g_iAWPNum)
+		set_fail_state("No AWPs found in the configuration file.")
+	
 	register_dictionary("AWPModels.txt")
 	
-	register_event("CurWeapon", "OnSelectAWP", "be", "1=1", "2=18")
 	RegisterHam(Ham_Spawn, "player", "OnPlayerSpawn", 1)
+	RegisterHam(Ham_Item_Deploy, "weapon_awp", "OnSelectAWP", 1)
 	
 	register_clcmd("say /awp", "ShowMenu")
 	register_clcmd("say_team /awp", "ShowMenu")
 	
+	g_iCallback = menu_makecallback("CheckAWPAccess")
 	g_pAtSpawn = register_cvar("am_open_at_spawn", "0")
-	g_iSayText = get_user_msgid("SayText")
+	g_pSaveChoice = register_cvar("am_save_choice", "0")
 }
 
 public plugin_precache()
+{
+	if(LibraryExists("crxranks", LibType_Library))
+		g_bRankSystem = true
+		
+	g_aAWP = ArrayCreate(AWP)
 	ReadFile()
+}
+
+public plugin_cfg()
+{
+	g_iSaveChoice = get_pcvar_num(g_pSaveChoice)
+	
+	if(g_iSaveChoice)
+		g_iVault = nvault_open("AWPModels")
+}
+
+public plugin_natives()
+	set_native_filter("native_filter")
+	
+public native_filter(const szNative[], id, iTrap)
+{
+	if(!iTrap)
+	{
+		static i
+		
+		for(i = 0; i < sizeof(g_szNatives); i++)
+		{
+			if(equal(szNative, g_szNatives[i]))
+				return PLUGIN_HANDLED
+		}
+	}
+	
+	return PLUGIN_CONTINUE
+}
+	
+public plugin_end()
+{
+	ArrayDestroy(g_aAWP)
+	
+	if(g_iSaveChoice)
+		nvault_close(g_iVault)
+}
 
 ReadFile()
 {
@@ -51,7 +137,10 @@ ReadFile()
 	
 	if(iFilePointer)
 	{
-		new szData[300], szFlag[2]
+		new eAWP[AWP], szData[160], szKey[32], szValue[128], iMaxLevels
+		
+		if(g_bRankSystem)
+			iMaxLevels = crxranks_get_max_levels()
 		
 		while(!feof(iFilePointer))
 		{
@@ -60,47 +149,130 @@ ReadFile()
 			
 			switch(szData[0])
 			{
-				case EOS, ';': continue
+				case EOS, '#', ';': continue
+				case '[':
+				{
+					if(szData[strlen(szData) - 1] == ']')
+					{
+						if(g_iAWPNum)
+							PushAWP(eAWP)
+							
+						g_iAWPNum++
+						replace(szData, charsmax(szData), "[", "")
+						replace(szData, charsmax(szData), "]", "")
+						copy(eAWP[NAME], charsmax(eAWP[NAME]), szData)
+						
+						eAWP[V_MODEL][0] = EOS
+						eAWP[P_MODEL][0] = EOS
+						eAWP[SELECT_SOUND][0] = EOS
+						eAWP[FLAG] = ADMIN_ALL
+						
+						if(g_bRankSystem)
+						{
+							eAWP[LEVEL] = 0
+							eAWP[SHOW_RANK] = false
+						}
+					}
+					else continue
+				}
 				default:
 				{
-					parse(szData, g_eSnipers[g_iSnipersNum][Name], charsmax(g_eSnipers[][Name]),	g_eSnipers[g_iSnipersNum][VModel], charsmax(g_eSnipers[][VModel]),
-					g_eSnipers[g_iSnipersNum][PModel], charsmax(g_eSnipers[][PModel]), szFlag, charsmax(szFlag))
+					strtok(szData, szKey, charsmax(szKey), szValue, charsmax(szValue), '=')
+					trim(szKey); trim(szValue)
 					
-					if(!is_blank(g_eSnipers[g_iSnipersNum][VModel]))
-						precache_model(g_eSnipers[g_iSnipersNum][VModel])
-						
-					if(!is_blank(g_eSnipers[g_iSnipersNum][PModel]))
-						precache_model(g_eSnipers[g_iSnipersNum][PModel])
-						
-					g_eSnipers[g_iSnipersNum][Flag] = is_blank(szFlag) ? ADMIN_ALL : read_flags(szFlag)
-						
-					szFlag[0] = EOS
-					g_iSnipersNum++
+					if(equal(szKey, "FLAG"))
+						eAWP[FLAG] = read_flags(szValue)
+					else if(equal(szKey, "LEVEL") && g_bRankSystem)
+						eAWP[LEVEL] = clamp(str_to_num(szValue), 0, iMaxLevels)
+					else if(equal(szKey, "SHOW_RANK") && g_bRankSystem)
+						eAWP[SHOW_RANK] = _:clamp(str_to_num(szValue), false, true)
+					else if(equal(szKey, "V_MODEL"))
+					{
+						precache_model(szValue)
+						copy(eAWP[V_MODEL], charsmax(eAWP[V_MODEL]), szValue)
+					}
+					else if(equal(szKey, "P_MODEL"))
+					{
+						precache_model(szValue)
+						copy(eAWP[P_MODEL], charsmax(eAWP[P_MODEL]), szValue)
+					}
+					else if(equal(szKey, "SELECT_SOUND"))
+					{
+						precache_sound(szValue)
+						copy(eAWP[SELECT_SOUND], charsmax(eAWP[SELECT_SOUND]), szValue)
+					}
 				}
 			}
 		}
+		
+		if(g_iAWPNum)
+			PushAWP(eAWP)
 		
 		fclose(iFilePointer)
 	}
 }
 
+public client_authorized(id)
+{
+	g_bFirstTime[id] = true
+	ArrayGetArray(g_aAWP, 0, g_eAWP[id])
+	g_iAWP[id] = 0
+	
+	if(g_iSaveChoice)
+	{
+		get_user_authid(id, g_szAuth[id], charsmax(g_szAuth[]))
+		set_task(DELAY_ON_CONNECT, "LoadData", id)
+	}
+}
+
+public client_disconnect(id)
+{
+	if(g_iSaveChoice)
+		UseVault(id, true)
+}
+
 public ShowMenu(id)
 {
-	new szTitle[128]
+	static eAWP[AWP]
+	new szTitle[128], szItem[128], iLevel
 	formatex(szTitle, charsmax(szTitle), "%L", id, "AM_MENU_TITLE")
-	
+
+	if(g_bRankSystem)
+		iLevel = crxranks_get_user_level(id)
+		
 	new iMenu = menu_create(szTitle, "MenuHandler")
 	
-	for(new iFlags = get_user_flags(id), i; i < g_iSnipersNum; i++)
+	for(new iFlags = get_user_flags(id), i; i < g_iAWPNum; i++)
 	{
-		if(g_eSnipers[i][Flag] == ADMIN_ALL || iFlags & g_eSnipers[i][Flag])
-			menu_additem(iMenu, formatin("%s %s", g_eSnipers[i][Name], g_iSniper[id] == i ? formatin("%L", id, "AM_MENU_SELECTED") : formatin("")))
-		else
-			menu_additem(iMenu, formatin("%s %L", g_eSnipers[i][Name], id, "AM_MENU_VIP_ONLY"), .paccess = g_eSnipers[i][Flag])
+		ArrayGetArray(g_aAWP, i, eAWP)
+		copy(szItem, charsmax(szItem), eAWP[NAME])
+		
+		if(g_bRankSystem && eAWP[LEVEL] && iLevel < eAWP[LEVEL])
+		{
+			if(eAWP[SHOW_RANK])
+			{
+				static szRank[32]
+				crxranks_get_rank_by_level(eAWP[LEVEL], szRank, charsmax(szRank))
+				format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_RANK", szRank)
+			}
+			else
+				format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_LEVEL", eAWP[LEVEL])
+		}
+		
+		if(eAWP[FLAG] != ADMIN_ALL && !(iFlags & eAWP[FLAG]))
+			format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_VIP_ONLY")
+			
+		if(g_iAWP[id] == i)
+			format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_SELECTED")
+		
+		menu_additem(iMenu, szItem, eAWP[NAME], eAWP[FLAG], g_iCallback)
 	}
 	
 	if(menu_pages(iMenu) > 1)
-		menu_setprop(iMenu, MPROP_TITLE, formatin("%s%L", szTitle, id, "AM_MENU_TITLE_PAGE"))
+	{
+		formatex(szItem, charsmax(szItem), "%s%L", szTitle, id, "AM_MENU_TITLE_PAGE")
+		menu_setprop(iMenu, MPROP_TITLE, szItem)
+	}
 		
 	menu_display(id, iMenu)
 	return PLUGIN_HANDLED
@@ -110,109 +282,95 @@ public MenuHandler(id, iMenu, iItem)
 {
 	if(iItem != MENU_EXIT)
 	{
-		if(g_iSniper[id] == iItem)
-			ColorChat(id, "%L", id, "AM_CHAT_ALREADY")
-		else
-		{
-			g_iSniper[id] = iItem
-			
-			if(is_user_alive(id) && get_user_weapon(id) == CSW_AWP)
-				OnSelectAWP(id)
-			
-			ColorChat(id, "%L", id, "AM_CHAT_SELECTED", g_eSnipers[iItem][Name])
-		}
+		g_iAWP[id] = iItem
+		ArrayGetArray(g_aAWP, iItem, g_eAWP[id])
+		
+		if(is_user_alive(id) && get_user_weapon(id) == CSW_AWP)
+			RefreshAWPModel(id)
+		
+		new szName[MAX_NAME_LENGTH], iUnused
+		menu_item_getinfo(iMenu, iItem, iUnused, szName, charsmax(szName), .callback = iUnused)
+		CC_SendMessage(id, "%L %L", id, "AM_CHAT_PREFIX", id, "AM_CHAT_SELECTED", szName)
+		
+		if(g_eAWP[id][SELECT_SOUND][0])
+			engfunc(EngFunc_EmitSound, id, CHAN_AUTO, g_eAWP[id][SELECT_SOUND], 1.0, ATTN_NORM, 0, PITCH_NORM)
 	}
 	
 	menu_destroy(iMenu)
 	return PLUGIN_HANDLED
 }
 
-public client_putinserver(id)
-{
-	g_bFirstTime[id] = true
-	g_iSniper[id] = 0
-}
+public LoadData(id)
+	UseVault(id, false)
+
+public CheckAWPAccess(id, iMenu, iItem)
+	return ((g_iAWP[id] == iItem) || !HasAWPAccess(id, iItem)) ? ITEM_DISABLED : ITEM_ENABLED
 
 public OnPlayerSpawn(id)
 {
-	if(is_user_alive(id) && get_pcvar_num(g_pAtSpawn) && g_iSniper[id] == 0 && g_bFirstTime[id])
+	if(is_user_alive(id) && get_pcvar_num(g_pAtSpawn) && !g_iAWP[id] && g_bFirstTime[id])
 	{
 		g_bFirstTime[id] = false
 		ShowMenu(id)
 	}
 }
 
-public OnSelectAWP(id)
+public OnSelectAWP(iEnt)
+	RefreshAWPModel(get_pdata_cbase(iEnt, m_pPlayer))
+
+RefreshAWPModel(const id)
 {
-	if(is_blank(g_eSnipers[g_iSniper[id]][VModel]))
-		set_pev(id, pev_viewmodel2, DEFAULT_V)
-	else set_pev(id, pev_viewmodel2, g_eSnipers[g_iSniper[id]][VModel])
-	
-	if(is_blank(g_eSnipers[g_iSniper[id]][PModel]))
-		set_pev(id, pev_weaponmodel2, DEFAULT_P)
-	else set_pev(id, pev_weaponmodel2, g_eSnipers[g_iSniper[id]][PModel])
+	set_pev(id, pev_viewmodel2, g_eAWP[id][V_MODEL])
+	set_pev(id, pev_weaponmodel2, g_eAWP[id][P_MODEL])
 }
 
-bool:is_blank(szString[])
-	return szString[0] == EOS
-	
-ColorChat(const id, const szInput[], any:...)
+PushAWP(eAWP[AWP])
 {
-	new iPlayers[32], iCount = 1
-	static szMessage[191]
-	vformat(szMessage, charsmax(szMessage), szInput, 3)
-	format(szMessage[0], charsmax(szMessage), "%L %s", id ? id : LANG_PLAYER, "AM_CHAT_PREFIX", szMessage)
+	if(!eAWP[V_MODEL][0])
+		copy(eAWP[V_MODEL], charsmax(eAWP[V_MODEL]), DEFAULT_V)
+		
+	if(!eAWP[P_MODEL][0])
+		copy(eAWP[P_MODEL], charsmax(eAWP[P_MODEL]), DEFAULT_P)
+		
+	ArrayPushArray(g_aAWP, eAWP)
+}
+
+bool:HasAWPAccess(const id, const iAWP)
+{		
+	static eAWP[AWP]
+	ArrayGetArray(g_aAWP, iAWP, eAWP)
 	
-	replace_all(szMessage, charsmax(szMessage), "!g", "^4")
-	replace_all(szMessage, charsmax(szMessage), "!n", "^1")
-	replace_all(szMessage, charsmax(szMessage), "!t", "^3")
-	
-	if(id)
-		iPlayers[0] = id
-	else
-		get_players(iPlayers, iCount, "ch")
-	
-	for(new i; i < iCount; i++)
+	if(g_bRankSystem && eAWP[LEVEL] && crxranks_get_user_level(id) < eAWP[LEVEL])
+		return false
+		
+	if(eAWP[FLAG] != ADMIN_ALL && !(get_user_flags(id) & eAWP[FLAG]))
+		return false
+		
+	return true
+}
+
+UseVault(const id, const bool:bSave)
+{
+	if(bSave)
 	{
-		if(is_user_connected(iPlayers[i]))
+		static szData[4]
+		num_to_str(g_iAWP[id], szData, charsmax(szData))
+		nvault_set(g_iVault, g_szAuth[id], szData)
+	}
+	else
+	{
+		static iAWP
+		iAWP = nvault_get(g_iVault, g_szAuth[id])
+		
+		if(iAWP > g_iAWPNum)
+			iAWP = 0
+		
+		if(iAWP && HasAWPAccess(id, iAWP))
 		{
-			message_begin(MSG_ONE_UNRELIABLE, g_iSayText, _, iPlayers[i])
-			write_byte(iPlayers[i])
-			write_string(szMessage)
-			message_end()
+			g_iAWP[id] = iAWP
+			
+			if(is_user_alive(id) && get_user_weapon(id) == CSW_AWP)
+				RefreshAWPModel(id)
 		}
 	}
-}
-
-#if !defined MAX_FMT_LENTH
-	#define MAX_FMT_LENGTH 256
-#endif
-
-#if !defined __vformat_allower
-	#define __vformat_allower __vformat_allower_
-	
-	__vformat_allower_()
-	{
-		vformat("", 0, "", 0)
-	}
-#endif
-
-formatin(const format[], any:...)
-{
-	static formatted[MAX_FMT_LENGTH]
-	#emit PUSH.C 0x2
-	#emit PUSH.S format
-	const FORMATTED_CHARSMAX = charsmax(formatted)
-	#emit PUSH.C FORMATTED_CHARSMAX
-	#emit LOAD.S.PRI 0x8 // Get size of arguments (count of arguments multiply by sizeof(cell))
-	#emit ADDR.ALT 0xC // This is the pointer to first argument
-	#emit ADD // Now in PRI we have the pointer to hidden return argument
-	#emit LOAD.I // Now in PRI we have the pointer to return buffer
-	#emit PUSH.PRI
-	#emit PUSH.C 0x10
-	#emit SYSREQ.C vformat
-	#emit STACK 0x14
-	#emit RETN // Don't execute the code for copy return generated by compiler
-	__vformat_allower()
-	return formatted
-}
+}	
