@@ -8,12 +8,14 @@
 native crxranks_get_max_levels()
 native crxranks_get_rank_by_level(level, buffer[], len)
 native crxranks_get_user_level(id)
+native crxranks_get_user_xp(id)
 
 new const g_szNatives[][] =
 {
 	"crxranks_get_max_levels",
 	"crxranks_get_rank_by_level",
-	"crxranks_get_user_level"
+	"crxranks_get_user_level",
+	"crxranks_get_user_xp"
 }
 
 #if !defined m_pPlayer
@@ -24,7 +26,7 @@ new const g_szNatives[][] =
 	#define client_disconnect client_disconnected
 #endif
 
-#define PLUGIN_VERSION "2.0"
+#define PLUGIN_VERSION "2.1"
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
 #define DELAY_ON_CONNECT 2.5
@@ -47,12 +49,15 @@ enum _:AWP
 	SELECT_SOUND[MAX_SOUND_LENGTH],
 	FLAG,
 	LEVEL,
-	bool:SHOW_RANK
+	bool:SHOW_RANK,
+	XP
 }
 
 new Array:g_aAWP,
 	bool:g_bFirstTime[MAX_PLAYERS + 1],
 	bool:g_bRankSystem,
+	bool:g_bGetLevel,
+	bool:g_bGetXP,
 	g_eAWP[MAX_PLAYERS + 1][AWP],
 	g_szAuth[MAX_PLAYERS + 1][MAX_AUTHID_LENGTH],
 	g_iAWP[MAX_PLAYERS + 1],
@@ -171,6 +176,7 @@ ReadFile()
 						{
 							eAWP[LEVEL] = 0
 							eAWP[SHOW_RANK] = false
+							eAWP[XP] = 0
 						}
 					}
 					else continue
@@ -183,9 +189,21 @@ ReadFile()
 					if(equal(szKey, "FLAG"))
 						eAWP[FLAG] = read_flags(szValue)
 					else if(equal(szKey, "LEVEL") && g_bRankSystem)
+					{
 						eAWP[LEVEL] = clamp(str_to_num(szValue), 0, iMaxLevels)
+						
+						if(!g_bGetLevel)
+							g_bGetLevel = true
+					}
 					else if(equal(szKey, "SHOW_RANK") && g_bRankSystem)
 						eAWP[SHOW_RANK] = _:clamp(str_to_num(szValue), false, true)
+					else if(equal(szKey, "XP") && g_bRankSystem)
+					{
+						eAWP[XP] = _:clamp(str_to_num(szValue), 0)
+						
+						if(!g_bGetXP)
+							g_bGetXP = true
+					}
 					else if(equal(szKey, "V_MODEL"))
 					{
 						precache_model(szValue)
@@ -234,11 +252,14 @@ public client_disconnect(id)
 public ShowMenu(id)
 {
 	static eAWP[AWP]
-	new szTitle[128], szItem[128], iLevel
+	new szTitle[128], szItem[128], iLevel, iXP
 	formatex(szTitle, charsmax(szTitle), "%L", id, "AM_MENU_TITLE")
 
-	if(g_bRankSystem)
+	if(g_bGetLevel)
 		iLevel = crxranks_get_user_level(id)
+	
+	if(g_bGetXP)
+		iXP = crxranks_get_user_xp(id)
 		
 	new iMenu = menu_create(szTitle, "MenuHandler")
 	
@@ -247,16 +268,22 @@ public ShowMenu(id)
 		ArrayGetArray(g_aAWP, i, eAWP)
 		copy(szItem, charsmax(szItem), eAWP[NAME])
 		
-		if(g_bRankSystem && eAWP[LEVEL] && iLevel < eAWP[LEVEL])
+		if(g_bRankSystem)
 		{
-			if(eAWP[SHOW_RANK])
+			if(eAWP[LEVEL] && iLevel < eAWP[LEVEL])
 			{
-				static szRank[32]
-				crxranks_get_rank_by_level(eAWP[LEVEL], szRank, charsmax(szRank))
-				format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_RANK", szRank)
+				if(eAWP[SHOW_RANK])
+				{
+					static szRank[32]
+					crxranks_get_rank_by_level(eAWP[LEVEL], szRank, charsmax(szRank))
+					format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_RANK", szRank)
+				}
+				else
+					format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_LEVEL", eAWP[LEVEL])
 			}
-			else
-				format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_LEVEL", eAWP[LEVEL])
+			
+			if(eAWP[XP] && iXP < eAWP[XP])
+				format(szItem, charsmax(szItem), "%s %L", szItem, id, "AM_MENU_XP", eAWP[XP])
 		}
 		
 		if(eAWP[FLAG] != ADMIN_ALL && !(iFlags & eAWP[FLAG]))
@@ -340,8 +367,14 @@ bool:HasAWPAccess(const id, const iAWP)
 	static eAWP[AWP]
 	ArrayGetArray(g_aAWP, iAWP, eAWP)
 	
-	if(g_bRankSystem && eAWP[LEVEL] && crxranks_get_user_level(id) < eAWP[LEVEL])
-		return false
+	if(g_bRankSystem)
+	{
+		if(eAWP[LEVEL] && crxranks_get_user_level(id) < eAWP[LEVEL])
+			return false
+			
+		if(eAWP[XP] && crxranks_get_user_xp(id) < eAWP[XP])
+			return false
+	}
 		
 	if(eAWP[FLAG] != ADMIN_ALL && !(get_user_flags(id) & eAWP[FLAG]))
 		return false
