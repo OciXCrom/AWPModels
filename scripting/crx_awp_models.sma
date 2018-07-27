@@ -26,7 +26,7 @@ new const g_szNatives[][] =
 	#define client_disconnect client_disconnected
 #endif
 
-#define PLUGIN_VERSION "2.1"
+#define PLUGIN_VERSION "2.1.1"
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
 #define DELAY_ON_CONNECT 2.5
@@ -343,7 +343,12 @@ public OnPlayerSpawn(id)
 }
 
 public OnSelectAWP(iEnt)
-	RefreshAWPModel(get_pdata_cbase(iEnt, m_pPlayer))
+{
+	new id = get_pdata_cbase(iEnt, m_pPlayer)
+	
+	if(is_user_connected(id))
+		RefreshAWPModel()
+}
 
 RefreshAWPModel(const id)
 {
