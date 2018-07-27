@@ -347,7 +347,7 @@ public OnSelectAWP(iEnt)
 	new id = get_pdata_cbase(iEnt, m_pPlayer)
 	
 	if(is_user_connected(id))
-		RefreshAWPModel()
+		RefreshAWPModel(id)
 }
 
 RefreshAWPModel(const id)
