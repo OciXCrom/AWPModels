@@ -18,15 +18,11 @@ new const g_szNatives[][] =
 	"crxranks_get_user_xp"
 }
 
-#if !defined m_pPlayer
-    #define m_pPlayer 41
-#endif
-
 #if defined client_disconnected
 	#define client_disconnect client_disconnected
 #endif
 
-#define PLUGIN_VERSION "2.1.1"
+#define PLUGIN_VERSION "2.1.2"
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
 #define DELAY_ON_CONNECT 2.5
@@ -79,7 +75,7 @@ public plugin_init()
 	register_dictionary("AWPModels.txt")
 	
 	RegisterHam(Ham_Spawn, "player", "OnPlayerSpawn", 1)
-	RegisterHam(Ham_Item_Deploy, "weapon_awp", "OnSelectAWP", 1)
+	register_event("CurWeapon", "OnSelectAWP", "be", "1=1", "2=18")
 	
 	register_clcmd("say /awp", "ShowMenu")
 	register_clcmd("say_team /awp", "ShowMenu")
@@ -206,13 +202,23 @@ ReadFile()
 					}
 					else if(equal(szKey, "V_MODEL"))
 					{
-						precache_model(szValue)
-						copy(eAWP[V_MODEL], charsmax(eAWP[V_MODEL]), szValue)
+						if(!file_exists(szValue))
+							log_amx("ERROR: model ^"%s^" not found!", szValue)
+						else
+						{
+							precache_model(szValue)
+							copy(eAWP[V_MODEL], charsmax(eAWP[V_MODEL]), szValue)
+						}
 					}
 					else if(equal(szKey, "P_MODEL"))
 					{
-						precache_model(szValue)
-						copy(eAWP[P_MODEL], charsmax(eAWP[P_MODEL]), szValue)
+						if(!file_exists(szValue))
+							log_amx("ERROR: model ^"%s^" not found!", szValue)
+						else
+						{
+							precache_model(szValue)
+							copy(eAWP[P_MODEL], charsmax(eAWP[P_MODEL]), szValue)
+						}
 					}
 					else if(equal(szKey, "SELECT_SOUND"))
 					{
@@ -342,13 +348,8 @@ public OnPlayerSpawn(id)
 	}
 }
 
-public OnSelectAWP(iEnt)
-{
-	new id = get_pdata_cbase(iEnt, m_pPlayer)
-	
-	if(is_user_connected(id))
-		RefreshAWPModel(id)
-}
+public OnSelectAWP(id)
+	RefreshAWPModel(id)
 
 RefreshAWPModel(const id)
 {
