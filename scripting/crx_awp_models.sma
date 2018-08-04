@@ -18,11 +18,15 @@ new const g_szNatives[][] =
 	"crxranks_get_user_xp"
 }
 
+#if !defined m_pPlayer
+	#define m_pPlayer 41
+#endif
+
 #if defined client_disconnected
 	#define client_disconnect client_disconnected
 #endif
 
-#define PLUGIN_VERSION "2.1.2"
+#define PLUGIN_VERSION "2.1.3"
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
 #define DELAY_ON_CONNECT 2.5
@@ -75,7 +79,7 @@ public plugin_init()
 	register_dictionary("AWPModels.txt")
 	
 	RegisterHam(Ham_Spawn, "player", "OnPlayerSpawn", 1)
-	register_event("CurWeapon", "OnSelectAWP", "be", "1=1", "2=18")
+	RegisterHam(Ham_Item_Deploy, "weapon_awp", "OnSelectAWP", 1)
 	
 	register_clcmd("say /awp", "ShowMenu")
 	register_clcmd("say_team /awp", "ShowMenu")
@@ -348,8 +352,13 @@ public OnPlayerSpawn(id)
 	}
 }
 
-public OnSelectAWP(id)
-	RefreshAWPModel(id)
+public OnSelectAWP(iEnt)
+{
+	new id = get_pdata_cbase(iEnt, m_pPlayer, 4)
+	
+	if(is_user_connected(id))
+		RefreshAWPModel(id)
+}
 
 RefreshAWPModel(const id)
 {
