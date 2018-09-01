@@ -26,10 +26,9 @@ new const g_szNatives[][] =
 	#define client_disconnect client_disconnected
 #endif
 
-#define PLUGIN_VERSION "2.1.3"
+#define PLUGIN_VERSION "2.1.4"
 #define DEFAULT_V "models/v_awp.mdl"
 #define DEFAULT_P "models/p_awp.mdl"
-#define DELAY_ON_CONNECT 2.5
 #define MAX_SOUND_LENGTH 128
 #define MAX_AUTHID_LENGTH 35
 
@@ -240,7 +239,7 @@ ReadFile()
 	}
 }
 
-public client_authorized(id)
+public client_connect(id)
 {
 	g_bFirstTime[id] = true
 	ArrayGetArray(g_aAWP, 0, g_eAWP[id])
@@ -249,7 +248,7 @@ public client_authorized(id)
 	if(g_iSaveChoice)
 	{
 		get_user_authid(id, g_szAuth[id], charsmax(g_szAuth[]))
-		set_task(DELAY_ON_CONNECT, "LoadData", id)
+		UseVault(id, false)
 	}
 }
 
@@ -335,10 +334,7 @@ public MenuHandler(id, iMenu, iItem)
 	
 	menu_destroy(iMenu)
 	return PLUGIN_HANDLED
-}
-
-public LoadData(id)
-	UseVault(id, false)
+}	
 
 public CheckAWPAccess(id, iMenu, iItem)
 	return ((g_iAWP[id] == iItem) || !HasAWPAccess(id, iItem)) ? ITEM_DISABLED : ITEM_ENABLED
@@ -416,6 +412,7 @@ UseVault(const id, const bool:bSave)
 		if(iAWP && HasAWPAccess(id, iAWP))
 		{
 			g_iAWP[id] = iAWP
+			ArrayGetArray(g_aAWP, iAWP, g_eAWP[id])
 			
 			if(is_user_alive(id) && get_user_weapon(id) == CSW_AWP)
 				RefreshAWPModel(id)
