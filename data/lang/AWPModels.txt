@@ -1,4 +1,4 @@
-﻿[en] -- OciXCrom
+[en] -- OciXCrom
 AM_CHAT_PREFIX = &x04[AWP Models]&x01
 AM_CHAT_SELECTED = You have selected the sniper &x04%s
 AM_MENU_TITLE = \y< \rChoose your AWP model \y>
