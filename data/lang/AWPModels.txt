@@ -30,3 +30,14 @@ AM_MENU_VIP_ONLY = \y~ \rVIP \y~
 AM_MENU_LEVEL = \r[LVL %i]
 AM_MENU_RANK = \r[RANK: %s]
 AM_MENU_XP = \r[XP: %i]
+
+[ru] -- Kin[g]
+AM_CHAT_PREFIX =  &x04[Модели AWP]&x01
+AM_CHAT_SELECTED = Вы выбрали снайпера &x04%s
+AM_MENU_TITLE = \y< \rВыберите свою модель AWP \y>
+AM_MENU_TITLE_PAGE = ^n\r-- \yСтраница:\r
+AM_MENU_SELECTED = \y~ \rSELECTED \y~
+AM_MENU_VIP_ONLY = \y~ \rVIP \y~
+AM_MENU_LEVEL = \r[LVL %i]
+AM_MENU_RANK = \r[РАНГ: %s]
+AM_MENU_XP = \r[XP: %i]
